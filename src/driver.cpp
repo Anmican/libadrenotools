@@ -44,8 +44,9 @@ static void *OpenVulkan(int dlopenFlags, int featureFlags, const char *tmpLibDir
         if (!customDriverName || !customDriverDir)
             return nullptr;
 
-        if (stat((std::string(customDriverDir) + customDriverName).c_str(), &buf) != 0)
-            return nullptr;
+        // APK entry paths (archive.apk!/entry) are resolved by the linker.
+        // if (stat((std::string(customDriverDir) + customDriverName).c_str(), &buf) != 0)
+        //     return nullptr;
     }
 
     // Verify that params for enabled features are correct
