@@ -12,6 +12,7 @@
  */
 struct HookImplParams {
     int featureFlags;
+    bool requireCustomHal = false;
     std::string tmpLibDir;
     std::string hookLibDir;
     std::string customDriverDir;

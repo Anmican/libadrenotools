@@ -37,6 +37,10 @@ __attribute__((visibility("default"))) void init_gsl(void *alloc, void *alloc64,
 
 __attribute__((visibility("default"))) void *hook_android_dlopen_ext(const char *filename, int flags, const android_dlextinfo *extinfo) {
     auto fallback{[&]() {
+        if (hook_params->requireCustomHal) {
+            LOGI("hook_android_dlopen_ext: refusing vendor HAL fallback");
+            return static_cast<void *>(nullptr);
+        }
         LOGI("hook_android_dlopen_ext: falling back!");
         return android_dlopen_ext(filename, flags, extinfo);
     }};
@@ -126,7 +130,10 @@ __attribute__((visibility("default"))) void *hook_android_dlopen_ext(const char 
     // To fix this we would need to search /proc/self/maps for the file to a loaded instance of the library in order to read it to patch the soname and load it uniquely
     if (hook_params->featureFlags & ADRENOTOOLS_DRIVER_CUSTOM) {
         LOGI("hook_android_dlopen_ext: loading custom driver: %s%s", hook_params->customDriverDir.c_str(), hook_params->customDriverName.c_str());
-        void *handle{android_dlopen_ext(hook_params->customDriverName.c_str(), flags, &newExtinfo)};
+        const auto path = hook_params->requireCustomHal
+            ? hook_params->customDriverDir + hook_params->customDriverName
+            : hook_params->customDriverName;
+        void *handle{android_dlopen_ext(path.c_str(), flags, &newExtinfo)};
         if (!handle) {
             LOGI("hook_android_dlopen_ext: hook failed: failed to load custom driver: %s!", dlerror());
             return fallback();

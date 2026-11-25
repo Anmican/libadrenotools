@@ -16,7 +16,9 @@
 #include <adrenotools/driver.h>
 #include <unistd.h>
 
-void *adrenotools_open_libvulkan(int dlopenFlags, int featureFlags, const char *tmpLibDir, const char *hookLibDir, const char *customDriverDir, const char *customDriverName, const char *fileRedirectDir, void **userMappingHandle) {
+static void *OpenVulkan(int dlopenFlags, int featureFlags, const char *tmpLibDir,
+                        const char *hookLibDir, const char *customDriverDir, const char *customDriverName,
+                        const char *fileRedirectDir, void **userMappingHandle, bool requireCustomHal) {
     // Bail out if linkernsbypass failed to load, this probably means we're on api < 28
     if (!linkernsbypass_load_status())
         return nullptr;
@@ -84,13 +86,34 @@ void *adrenotools_open_libvulkan(int dlopenFlags, int featureFlags, const char *
         }
     }()};
 
-    initHookParam(new HookImplParams(featureFlags, tmpLibDir, hookLibDir, customDriverDir, customDriverName, fileRedirectDir, importMapping));
+    auto *params = new HookImplParams(featureFlags, tmpLibDir, hookLibDir, customDriverDir,
+                                      customDriverName, fileRedirectDir, importMapping);
+    params->requireCustomHal = requireCustomHal;
+    initHookParam(params);
 
     // Load the libvulkan hook into the isolated namespace
     if (!linkernsbypass_namespace_dlopen("libmain_hook.so", RTLD_GLOBAL, hookNs))
         return nullptr;
 
     return linkernsbypass_namespace_dlopen_unique("/system/lib64/libvulkan.so", tmpLibDir, dlopenFlags, hookNs);
+}
+
+void *adrenotools_open_libvulkan(int dlopenFlags, int featureFlags, const char *tmpLibDir, const char *hookLibDir, const char *customDriverDir, const char *customDriverName, const char *fileRedirectDir, void **userMappingHandle) {
+    return OpenVulkan(dlopenFlags, featureFlags, tmpLibDir, hookLibDir, customDriverDir,
+                      customDriverName, fileRedirectDir, userMappingHandle, false);
+}
+
+void *adrenotools_open_libvulkan_no_fallback(int dlopenFlags, int featureFlags, const char *tmpLibDir,
+                                           const char *hookLibDir, const char *customDriverDir,
+                                           const char *customDriverName, const char *fileRedirectDir,
+                                           void **userMappingHandle) {
+    if (!(featureFlags & ADRENOTOOLS_DRIVER_CUSTOM))
+        return nullptr;
+    if ((featureFlags & ADRENOTOOLS_DRIVER_GPU_MAPPING_IMPORT) && !userMappingHandle)
+        return nullptr;
+
+    return OpenVulkan(dlopenFlags, featureFlags, tmpLibDir, hookLibDir, customDriverDir,
+                      customDriverName, fileRedirectDir, userMappingHandle, true);
 }
 
 bool adrenotools_import_user_mem(void *handle, void *hostPtr, uint64_t size) {
